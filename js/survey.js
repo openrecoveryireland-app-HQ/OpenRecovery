@@ -1,4 +1,3 @@
-
 const selected = [];
 const ratings = {};
 
@@ -64,7 +63,7 @@ function showForm() {
   });
 
   step2.innerHTML += `
-    <button class="btn" onclick="showQuestions()">
+    <button class="btn" onclick="checkRatingsBeforeQuestions()">
       Continue
     </button>
   `;
@@ -89,6 +88,15 @@ function rate(star) {
   });
 }
 
+function checkRatingsBeforeQuestions() {
+  if (Object.keys(ratings).length < 3) {
+    alert("Please rate all 3 logos before continuing.");
+    return;
+  }
+
+  showQuestions();
+}
+
 function showQuestions() {
   const step3 = document.getElementById("step3");
   step3.style.display = "block";
@@ -101,74 +109,73 @@ function showQuestions() {
     <label><input type="radio" name="recoveryExperience" value="No"> No</label><br>
     <label><input type="radio" name="recoveryExperience" value="Prefer not to answer"> Prefer not to answer</label>
 
-    <p>Which of your three chosen logos feels most trustworthy?</p>
-    <textarea></textarea>
+    <p>Of the three logos you selected, which is your overall favourite?</p>
+
+    <label><input type="radio" name="favouriteLogo" value="${selected[0]}"> Logo ${selected[0]}</label><br>
+    <label><input type="radio" name="favouriteLogo" value="${selected[1]}"> Logo ${selected[1]}</label><br>
+    <label><input type="radio" name="favouriteLogo" value="${selected[2]}"> Logo ${selected[2]}</label>
 
     <p>Which logo best represents private, non-judgemental recovery support?</p>
-    <textarea></textarea>
+
+    <label><input type="radio" name="trustworthy" value="${selected[0]}"> Logo ${selected[0]}</label><br>
+    <label><input type="radio" name="trustworthy" value="${selected[1]}"> Logo ${selected[1]}</label><br>
+    <label><input type="radio" name="trustworthy" value="${selected[2]}"> Logo ${selected[2]}</label>
 
     <p>What emotion does your favourite logo evoke in you?</p>
-    <textarea></textarea>
+    <textarea maxlength="100" placeholder="Maximum 100 characters"></textarea>
 
     <p>What, if anything, would improve your favourite logo?</p>
-    <textarea></textarea>
+    <textarea maxlength="100" placeholder="Maximum 100 characters"></textarea>
 
     <p>Any other comments?</p>
-    <textarea></textarea>
+    <textarea maxlength="100" placeholder="Maximum 100 characters"></textarea>
 
-    <button class="btn" onclick="submitToGoogleSheet()">Submit</button>
+    <div>
+    <button class="btn" onclick="checkQuestionsBeforeSubmit()">Submit</button>
+     <a href="../index.html" class="home-link">← Return to OpenRecovery</a>
+    </div>
   `;
+  document.getElementById("step3").scrollIntoView({
+  behavior: "smooth",
+  block: "start"
+});
 }
 
-function downloadCSV() {
+function checkQuestionsBeforeSubmit() {
+  const recoveryExperience = getRadioValue("recoveryExperience");
+  const favouriteLogo = getRadioValue("favouriteLogo");
+  const trustworthy = getRadioValue("trustworthy");
   const answers = document.querySelectorAll("#step3 textarea");
 
-  const rows = [
-    ["Logo", "Rating", "Question", "Answer"]
-  ];
+  if (recoveryExperience === "") {
+    alert("Please answer the recovery experience question.");
+    return;
+  }
 
-  selected.forEach(function (id) {
-    rows.push([
-      "Logo " + id,
-      ratings[id] || "",
-      "",
-      ""
-    ]);
-  });
+  if (favouriteLogo === "") {
+    alert("Please select your overall favourite logo.");
+    return;
+  }
 
-  rows.push(["", "", "Recovery experience", getRadioValue("recoveryExperience")]);
-  rows.push(["", "", "Most trustworthy logo", answers[0]?.value || ""]);
-  rows.push(["", "", "Best represents recovery support", answers[1]?.value || ""]);
-  rows.push(["", "", "Emotion from favourite logo", answers[2]?.value || ""]);
-  rows.push(["", "", "Suggested improvement", answers[3]?.value || ""]);
-  rows.push(["", "", "Other comments", answers[4]?.value || ""]);
+  if (trustworthy === "") {
+    alert("Please select which logo best represents private, non-judgemental recovery support.");
+    return;
+  }
 
-  const csv = rows.map(function (row) {
-    return row.map(function (cell) {
-      return '"' + String(cell).replace(/"/g, '""') + '"';
-    }).join(",");
-  }).join("\n");
+  for (let i = 0; i < answers.length; i++) {
+    if (answers[i].value.trim() === "") {
+      alert("Please answer all questions before submitting.");
+      return;
+    }
+  }
 
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "openrecovery-logo-survey.csv";
-  a.click();
-
-  URL.revokeObjectURL(url);
-}
-
-function getRadioValue(name) {
-  const selectedRadio = document.querySelector(
-    'input[name="' + name + '"]:checked'
-  );
-
-  return selectedRadio ? selectedRadio.value : "";
+  submitToGoogleSheet();
 }
 
 function submitToGoogleSheet() {
+  const submitButton = document.querySelector("#step3 button");
+  submitButton.disabled = true;
+  submitButton.textContent = "Submitting...";
   const answers = document.querySelectorAll("#step3 textarea");
 
   const data = {
@@ -183,21 +190,33 @@ function submitToGoogleSheet() {
     logo3: selected[2],
     rating3: ratings[selected[2]] || "",
 
-    mostTrustworthy: answers[0]?.value || "",
-    bestRepresentsRecoverySupport: answers[1]?.value || "",
-    emotion: answers[2]?.value || "",
-    improvement: answers[3]?.value || "",
-    otherComments: answers[4]?.value || ""
+    favouriteLogo: getRadioValue("favouriteLogo"),
+bestRepresentsRecoverySupport: getRadioValue("trustworthy"),
+
+emotion: answers[0]?.value || "",
+improvement: answers[1]?.value || "",
+otherComments: answers[2]?.value || ""
   };
 
   fetch("https://script.google.com/macros/s/AKfycbx4PkEHQUHUmbK1LrU9179jqfd3JB6Q5_WIyTdzhQ83G7P4mV-rCyGezHyUiUKYNbfu8w/exec", {
     method: "POST",
     body: JSON.stringify(data)
   })
-  .then(function () {
-    alert("Thank you. Your response has been submitted.");
-  })
+   .then(function () {
+   alert("Thank you. Your response has been submitted.");
+   submitButton.textContent = "Submitted";
+ })
   .catch(function () {
-    alert("Something went wrong. Please try again.");
-  });
+  alert("Something went wrong. Please try again.");
+  submitButton.disabled = false;
+  submitButton.textContent = "Submit";
+ });
+}
+
+function getRadioValue(name) {
+  const selectedRadio = document.querySelector(
+    'input[name="' + name + '"]:checked'
+  );
+
+  return selectedRadio ? selectedRadio.value : "";
 }
